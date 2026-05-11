@@ -1,11 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"twelve_data_client/internal/constant"
+	"twelve_data_client/internal/model"
 	"twelve_data_client/internal/services"
 )
 
@@ -19,6 +22,8 @@ func main() {
 	var (
 		messageChannel = make(chan []byte)
 		interruptChannel = make(chan os.Signal, 0x1)
+
+		subscriptionResponse model.SubscriptionResponse
 	)
 
 	flag.Parse()
@@ -30,7 +35,7 @@ func main() {
 	fmt.Println("你正在使用 API Key 运行: " + userArguement)
 	fmt.Println("当前你正在调用: " + constant.TWELVED_DATA_WEBSOCKET_URL)
 
-	connection, err := services.GetTwelveDataWebSocket(userArguement)
+	connection, err := services.GetTwelveDataWebSocket(userArguement, model.NewSubscribe("AAPL", "RY", "RY:TSX", "EUR/USD", "BTC/USD"))
 	if err != nil {
 		panic(err)
 	}
@@ -41,11 +46,22 @@ func main() {
 		for {
 				_, message, err := connection.ReadMessage()
 				if err != nil {
+					log.Println("读取消息失败: ", err)
 					close(messageChannel)
 					panic(err)
 				}
 
 				messageChannel <- message
+
+				if err := json.Unmarshal(message, &subscriptionResponse); err == nil {
+					log.Println("订阅响应:", subscriptionResponse)
+					
+					for _, detail := range subscriptionResponse.Success {
+						log.Println("订阅成功:", detail)
+					}
+
+					continue
+				}
 			}
 	}()
 
@@ -66,5 +82,4 @@ func main() {
 			return
 		}
 	}
-	
 }

@@ -55,3 +55,18 @@ func joinSymbols(symbols []string) string {
 	}
 	return out
 }
+
+// SubscriptionResponse 表示顶级的 JSON 结构
+type SubscriptionResponse struct {
+	Event   string               `json:"event"`
+	Status  string               `json:"status"`
+	Success []SubscriptionDetail `json:"success"`
+}
+
+// SubscriptionDetail 表示 success 数组中的单个资产条目
+type SubscriptionDetail struct {
+	Symbol   string `json:"symbol"`
+	Exchange string `json:"exchange"`
+	Country  string `json:"country"`
+	Type     string `json:"type"`
+}
