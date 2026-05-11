@@ -6,8 +6,8 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func GetTwelveDataWebSocket() (*websocket.Conn, error) {
-	url := constant.TWELVED_DATA_WEBSOCKET_URL  + ""
+func GetTwelveDataWebSocket(apiKey string) (*websocket.Conn, error) {
+	url := constant.TWELVED_DATA_WEBSOCKET_URL + "?apiKey=" + apiKey
 
 	connection, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
