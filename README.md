@@ -147,14 +147,92 @@ if err == nil && priceEvent.Symbol != "" {
 
 本项目包含全面的基准测试套件，覆盖延迟、性能、价格数据和并发场景。
 
-### 运行所有基准测试
+### 快速开始
+
+#### 基本测试命令
+
+最简单的测试方式:
 
 ```bash
-cd TwelveDataClient
-go test -v -bench=. ./test/
+# 运行所有单元测试 (详细输出)
+go test -v ./test/
+
+# 运行所有单元测试 (简洁输出)
+go test ./test/
 ```
 
-### 运行特定基准测试
+#### 基准测试命令
+
+```bash
+# 运行所有基准测试
+go test -v -bench=. ./test/
+
+# 运行所有基准测试 (带内存报告)
+go test -v -bench=. -benchmem ./test/
+```
+
+### 综合全面的测试输出
+
+#### 1. 完整的综合测试报告
+
+```bash
+go test -v -bench=. -benchmem -cover -timeout=30s ./test/ 2>&1 | tee test_report.txt
+```
+
+这会生成包含以下内容的完整报告:
+- 所有单元测试的详细结果
+- 所有基准测试的性能数据
+- 代码覆盖率统计
+- 内存分配信息
+- 输出同时保存到 test_report.txt 文件
+
+#### 2. 测试覆盖率报告
+
+```bash
+# 显示覆盖率百分比
+go test -v -cover ./test/
+
+# 生成可视化覆盖率报告
+go test -coverprofile=coverage.out ./test/
+go tool cover -html=coverage.out -o coverage.html
+```
+
+然后在浏览器打开 coverage.html 查看详细的覆盖率分析。
+
+### 分类运行测试
+
+#### 3. 只运行单元测试 (不运行基准)
+
+```bash
+go test -v -run=^Test ./test/
+```
+
+#### 4. 只运行基准 (不运行单元测试)
+
+```bash
+go test -v -bench=. -run=^$ ./test/
+```
+
+#### 5. 运行特定类别的测试
+
+```bash
+# 只运行 WebSocket 服务测试
+go test -v -run=WebSocketService ./test/
+
+# 只运行价格数据测试
+go test -v -run=Pricing ./test/
+
+# 只运行错误处理测试
+go test -v -run=Error ./test/
+
+# 只运行订阅响应测试
+go test -v -run=SubscriptionResponse ./test/
+
+# 只运行时间戳测试
+go test -v -run=Timestamp ./test/
+```
+
+#### 6. 运行特定基准测试
 
 ```bash
 # 延迟测试
@@ -168,11 +246,49 @@ go test -v -bench=Pricing ./test/
 
 # 并发测试
 go test -v -bench=Concurrent ./test/
+
+# WebSocket 服务测试
+go test -v -bench=WebSocketService ./test/
 ```
 
-### 基准测试详解
+### 基准性能分析
 
-#### 延迟测试 (Latency)
+#### 7. CPU 和内存分析
+
+```bash
+# 生成 CPU 使用分析
+go test -v -bench=. -cpuprofile=cpu.prof ./test/
+go tool pprof -text cpu.prof > cpu_analysis.txt
+
+# 生成内存使用分析
+go test -v -bench=. -memprofile=mem.prof ./test/
+go tool pprof -text mem.prof > mem_analysis.txt
+```
+
+#### 8. 交互式性能分析
+
+```bash
+# 在浏览器中打开分析工具
+go test -bench=. -cpuprofile=cpu.prof ./test/
+go tool pprof -http=:8080 cpu.prof
+```
+
+#### 9. 比较两次基准测试结果
+
+```bash
+# 运行第一次基准
+go test -bench=. -benchmem ./test/ > bench1.txt
+
+# 修改代码...
+
+# 运行第二次基准
+go test -bench=. -benchmem ./test/ > bench2.txt
+
+# 比较结果
+benchstat bench1.txt bench2.txt
+```
+
+### 延迟测试 (Latency)
 
 测量单个操作的响应时间：
 
@@ -187,7 +303,7 @@ BenchmarkNewSubscribe_Latency-8    2500000    480 ns/op    200 B/op    5 allocs/
 | 200 B/op | 平均每次操作分配 200 字节内存 |
 | 5 allocs/op | 平均每次操作发生 5 次内存分配 |
 
-#### 性能测试 (Performance)
+### 性能测试 (Performance)
 
 压力测试系统在高负载下的表现：
 
@@ -203,9 +319,12 @@ $ go test -v -bench=BenchmarkNewSubscribe_StressMax ./test/
 
 # 并发订阅
 $ go test -v -bench=BenchmarkConcurrentSubscriptions ./test/
+
+# 内存分配报告
+$ go test -v -bench=BenchmarkMemoryAllocation -benchmem ./test/
 ```
 
-#### 价格数据测试 (Pricing)
+### 价格数据测试 (Pricing)
 
 验证价格数据的正确性和精度：
 
@@ -215,13 +334,24 @@ $ go test -v -bench=BenchmarkPricing_FastPriceUpdate ./test/
 
 # 批量价格事件处理
 $ go test -v -bench=BenchmarkPriceEventBatch ./test/
+
+# 价格数据验证
+$ go test -v -run=Pricing ./test/
 ```
 
-#### 内存分配测试
+### WebSocket 服务集成测试
+
+验证 WebSocket 服务的实际使用：
 
 ```bash
-# 报告内存分配情况
-$ go test -v -bench=BenchmarkMemoryAllocation ./test/ -benchmem
+# WebSocket 服务消息生成测试
+$ go test -v -run=WebSocketService_SubscriptionMessageGeneration ./test/
+
+# WebSocket 服务消息序列化基准
+$ go test -v -bench=WebSocketService_MessageSerialization ./test/
+
+# 端到端消息流性能
+$ go test -v -bench=WebSocketService_EndToEndMessageFlow ./test/
 ```
 
 ### 解释基准输出
@@ -232,6 +362,154 @@ BenchmarkNewSubscribe_Latency-8    2500000    480 ns/op    200 B/op    5 allocs/
                   │                  │        │          │             │
             测试名称              CPU核数  迭代次数   单次耗时  内存使用   分配次数
 ```
+
+### 脚本化测试运行
+
+#### Linux/macOS 测试脚本
+
+创建文件 `run_tests.sh`:
+
+```bash
+#!/bin/bash
+
+echo "========================================="
+echo "TwelveData WebSocket 客户端 - 完整测试"
+echo "========================================="
+echo ""
+
+echo "运行时间: $(date)"
+echo ""
+
+echo "1. 运行所有单元测试..."
+go test -v -run=^Test ./test/ 2>&1 | tee test_unit.log
+echo ""
+
+echo "2. 运行所有基准测试..."
+go test -v -bench=. -benchmem ./test/ 2>&1 | tee test_bench.log
+echo ""
+
+echo "3. 生成覆盖率报告..."
+go test -coverprofile=coverage.out ./test/
+go tool cover -html=coverage.out -o coverage.html
+echo "覆盖率报告已生成: coverage.html"
+echo ""
+
+echo "========================================="
+echo "测试完成!"
+echo "========================================="
+```
+
+运行脚本:
+```bash
+chmod +x run_tests.sh
+./run_tests.sh
+```
+
+#### Windows PowerShell 测试脚本
+
+创建文件 `run_tests.ps1`:
+
+```powershell
+Write-Host "=========================================" -ForegroundColor Green
+Write-Host "TwelveData WebSocket 客户端 - 完整测试" -ForegroundColor Green
+Write-Host "=========================================" -ForegroundColor Green
+Write-Host ""
+
+$timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+Write-Host "运行时间: $timestamp"
+Write-Host ""
+
+Write-Host "1. 运行所有单元测试..." -ForegroundColor Cyan
+go test -v -run=^Test ./test/ 2>&1 | Tee-Object -FilePath test_unit.log
+Write-Host ""
+
+Write-Host "2. 运行所有基准测试..." -ForegroundColor Cyan
+go test -v -bench=. -benchmem ./test/ 2>&1 | Tee-Object -FilePath test_bench.log
+Write-Host ""
+
+Write-Host "3. 生成覆盖率报告..." -ForegroundColor Cyan
+go test -coverprofile=coverage.out ./test/
+go tool cover -html=coverage.out -o coverage.html
+Write-Host "覆盖率报告已生成: coverage.html" -ForegroundColor Yellow
+Write-Host ""
+
+Write-Host "=========================================" -ForegroundColor Green
+Write-Host "测试完成!" -ForegroundColor Green
+Write-Host "=========================================" -ForegroundColor Green
+```
+
+运行脚本:
+```powershell
+.\run_tests.ps1
+```
+
+### 推荐的命令组合
+
+#### 日常开发 (快速检查)
+
+```bash
+go test -v ./test/
+```
+
+#### 提交前检查 (详细验证)
+
+```bash
+go test -v -bench=. -benchmem -cover ./test/
+```
+
+#### 性能优化 (详细分析)
+
+```bash
+go test -v -bench=. -benchmem -benchtime=10s -cpuprofile=cpu.prof ./test/
+go tool pprof -http=:8080 cpu.prof
+```
+
+#### 持续集成 (CI/CD)
+
+```bash
+go test -v -race -cover -timeout=60s ./test/ && \
+go test -v -bench=. -benchmem ./test/
+```
+
+### 输出格式说明
+
+#### 测试输出格式
+
+```
+=== RUN   TestName
+    file.go:123: 测试日志输出
+--- PASS: TestName (0.00s)
+```
+
+| 字段 | 含义 |
+|-----|------|
+| RUN | 测试开始 |
+| PASS | 测试通过 |
+| FAIL | 测试失败 |
+| SKIP | 测试跳过 |
+| 0.00s | 测试耗时 |
+
+#### 成功的测试输出
+
+```
+ok      twelve_data_client/test     0.123s  coverage: 85.2%
+```
+
+表示:
+- 所有测试通过
+- 耗时 0.123 秒
+- 代码覆盖率 85.2%
+
+#### 失败的测试输出
+
+```
+FAIL    twelve_data_client/test     0.456s
+```
+
+表示:
+- 存在失败的测试
+- 耗时 0.456 秒
+- 需要查看详细的失败信息
 
 ## 测试覆盖
 
