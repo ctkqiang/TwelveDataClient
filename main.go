@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 	"twelve_data_client/internal/color"
 	"twelve_data_client/internal/constant"
@@ -16,10 +17,39 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+const (
+	pongWait   = 30 * time.Second
+	pingPeriod = (pongWait * 9) / 10
+)
+
 var (
+    price model.PriceEvent
 	userArguement string
 	mode          string
-	symbols       = []string{"AAPL", "RY", "RY:TSX", "EUR/USD", "XAU/USD"}
+	subResp       model.SubscriptionResponse
+	Exchange      = "NASDAQ"
+	symbols = []string{
+		"AAPL",   // 苹果公司
+		"MSFT",   // 微软公司
+		"AMZN",   // 亚马逊公司
+		"NVDA",   // 英伟达公司
+		"GOOGL",  // Alphabet公司（A类股）
+		"META",   // Meta平台公司
+		"BRK.B",  // 伯克希尔·哈撒韦公司
+		"TSLA",   // 特斯拉公司
+		"UNH",    // 联合健康集团
+		"JPM",    // 摩根大通公司
+		"JNJ",    // 强生公司
+		"V",      // Visa公司
+		"PG",     // 宝洁公司
+		"HD",     // 家得宝公司
+		"MA",     // 万事达公司
+		"CVX",    // 雪佛龙公司
+		"MRK",    // 默克公司
+		"ABBV",   // 艾伯维公司
+		"PEP",    // 百事公司
+		"COST",   // 好市多批发公司
+	}
 )
 
 func init() {
@@ -29,6 +59,8 @@ func init() {
 
 func main() {
 	var (
+		demoLimit = 0x64
+
 		messageChannel   = make(chan []byte)
 		interruptChannel = make(chan os.Signal, 0x1)
 	)
@@ -36,18 +68,97 @@ func main() {
 	flag.Parse()
 
 	if userArguement == "{YOUR_API_KEY_HERE}" {
-		fmt.Println(color.Red("Missing API Key. Get one at: https://twelvedata.com/"))
+		fmt.Println(color.Red("缺少API密钥。请从https://twelvedata.com/获取一个。"))
 		os.Exit(1)
 	}
 	
-	fmt.Println(color.Cyanf("API Key: ...%s", userArguement[len(userArguement)-4:]))
+	fmt.Println(color.Cyanf("API密钥: ...%s", userArguement[len(userArguement)-0x4:]))
 	
 	if mode == "api" {
-		fmt.Println(color.Dimf("Endpoint: %s", constant.TWELVED_DATA_API_URL))
+		fmt.Println(color.Dimf("端点: %s", constant.TWELVED_DATA_API_URL))
 
+		stocks, err := services.GetAllStocks(Exchange, "demo")
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Printf("  %s %s %s %s %s\n",
+			color.Bold(color.Blue("代码")),
+			color.Bold(color.Blue("名称")),
+			color.Bold(color.Blue("交易所")),
+			color.Bold(color.Blue("货币")),
+			color.Bold(color.Blue("类型")),
+		)
 		
+		fmt.Printf("  %s\n", color.Blue(strings.Repeat("─", 0x50)))
+
+		for _, s := range stocks {
+			fmt.Printf("  %s  %s  %s  %s  %s\n",
+				color.Cyanf("%-14s", s.Symbol),
+				color.Whitef("%-28s", truncate(s.Name, 0x1C)),
+				color.Dimf("%-20s", s.Exchange),
+				color.Yellowf("%-8s", s.Currency),
+				color.Dim(s.Type),
+			)
+		}
+
+		fmt.Printf("  %s %s\n",
+			color.Blue(strings.Repeat("─", 0x50)),
+			color.Greenf("共 %d 只股票", len(stocks)),
+		)
+
+		if len(stocks) < demoLimit {
+			demoLimit = len(stocks)
+		}
+
+		fmt.Printf("\n  %s\n", color.Bold(color.Green("最新时间序列数据 (日线，最近 5 个交易日)")))
+
+		for i := 0x0; i < demoLimit; i++ {
+			s := stocks[i]
+			fullSymbol := fmt.Sprintf("%s:%s", s.Symbol, s.Exchange)
+
+			params := &model.TimeSeriesParams{
+				Symbol:     fullSymbol,
+				Interval:   "1day",
+				OutputSize: 0x5,
+			}
+
+			tsResp, err := services.GetTimeSeries(userArguement, params)
+			if err != nil {
+				fmt.Printf("  %s  %s - %v\n", color.Red("NOPE"), fullSymbol, err)
+				continue
+			}
+
+			fmt.Printf("\n  %s %s (%s)\n",
+				color.Cyan(s.Symbol),
+				color.White(truncate(s.Name, 0x18)),
+				color.Yellow(s.Currency))
+
+
+			fmt.Printf("  %s  %s  %s  %s  %s  %s\n",
+				color.Bold("日期"),
+				color.Bold("开盘"),
+				color.Bold("最高"),
+				color.Bold("最低"),
+				color.Bold("收盘"),
+				color.Bold("成交量"))
+
+			for _, v := range tsResp.Values {
+				fmt.Printf("  %s  %7s  %7s  %7s  %7s  %10s\n",
+					v.DateTime.Format("2006-01-02"),
+					v.Open,
+					v.High,
+					v.Low,
+					v.Close,
+					v.Volume,
+				)
+			}
+
+
+			time.Sleep(0x1 * time.Second)
+		}
 	} else if mode == "ws" {
-		fmt.Println(color.Dimf("Endpoint: %s", constant.TWELVED_DATA_WEBSOCKET_URL))
+		fmt.Println(color.Dimf("端点: %s", constant.TWELVED_DATA_WEBSOCKET_URL))
 	
 		connection, err := services.GetTwelveDataWebSocket(userArguement, model.NewSubscribe(symbols...))
 		if err != nil {
@@ -55,11 +166,6 @@ func main() {
 		}
 
 		defer connection.Close()
-
-		const (
-			pongWait   = 30 * time.Second
-			pingPeriod = (pongWait * 9) / 10
-		)
 
 		done := make(chan struct{})
 
@@ -77,7 +183,7 @@ func main() {
 				case <-done:
 					return
 				case <-ticker.C:
-					connection.SetWriteDeadline(time.Now().Add(10 * time.Second))
+					connection.SetWriteDeadline(time.Now().Add(0xA * time.Second))
 					if err := connection.WriteMessage(websocket.PingMessage, nil); err != nil {
 						log.Println(color.Redf("心跳发送失败: %v", err))
 						return
@@ -103,11 +209,12 @@ func main() {
 					return
 				}
 
-				var subResp model.SubscriptionResponse
 				if err := json.Unmarshal(message, &subResp); err == nil && len(subResp.Success) > 0 {
 					if !subscriptionConfirmed {
 						subscriptionConfirmed = true
-						fmt.Println(color.Bold(color.Green("  Subscribed")))
+						
+						fmt.Println(color.Bold(color.Green("  已订阅")))
+
 						for _, detail := range subResp.Success {
 							fmt.Printf("    %s%s  %s%s\n",
 								color.Cyan(detail.Symbol),
@@ -119,7 +226,6 @@ func main() {
 					continue
 				}
 
-				var price model.PriceEvent
 				if err := json.Unmarshal(message, &price); err == nil && price.Symbol != "" {
 					messageChannel <- message
 					continue
@@ -160,6 +266,14 @@ func main() {
 		}
 	} else {
 		fmt.Println(color.Red("无效模式。请使用 --api 或 --ws。"))
-		os.Exit(1)
+		os.Exit(0x1)
 	}
+}
+
+func truncate(s string, max int) string {
+	runes := []rune(s)
+	if len(runes) <= max {
+		return s
+	}
+	return string(runes[:max-0x1]) + "…"
 }
