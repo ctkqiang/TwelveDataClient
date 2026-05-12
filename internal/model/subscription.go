@@ -70,3 +70,26 @@ type SubscriptionDetail struct {
 	Country  string `json:"country"`
 	Type     string `json:"type"`
 }
+
+// PriceEvent 表示 Twelve Data WebSocket 推送的实时价格事件
+//
+//	{
+//	  "event": "price",
+//	  "symbol": "BTC/USD",
+//	  "currency_base": "Bitcoin",
+//	  "currency_quote": "US Dollar",
+//	  "exchange": "Coinbase Pro",
+//	  "type": "Digital Currency",
+//	  "timestamp": 1778551560,
+//	  "price": 81276.71
+//	}
+type PriceEvent struct {
+	Event        string  `json:"event"`
+	Symbol       string  `json:"symbol"`
+	CurrencyBase string  `json:"currency_base"`
+	CurrencyQuote string `json:"currency_quote"`
+	Exchange     string  `json:"exchange"`
+	Type         string  `json:"type"`
+	Timestamp    int64   `json:"timestamp"`
+	Price        float64 `json:"price"`
+}
