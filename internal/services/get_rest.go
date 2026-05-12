@@ -26,7 +26,6 @@ func GetAllStocks(exchange string, apiKey string) ([] model.Stock,  error) {
 		url = fmt.Sprintf("%s?exchange=%s", url, exchange)
 	}
 
-
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("获取股票数据失败: %w", err)

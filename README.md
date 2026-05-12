@@ -471,6 +471,239 @@ go test -v -race -cover -timeout=60s ./test/ && \
 go test -v -bench=. -benchmem ./test/
 ```
 
+## REST API 测试
+
+项目包含完整的 REST API 测试，验证 GetAllStocks 功能的正确性和性能。
+
+### API 测试概述
+
+API 测试文件位于 `test/api_test.go`，包含以下内容:
+
+- 15+ 个功能单元测试
+- 2 个性能基准测试
+- 使用 httptest 模拟 HTTP 服务器，无需实际网络调用
+- 完整的错误处理验证
+- 中文数据支持测试
+
+### 运行 API 测试
+
+#### 1. 运行所有 API 测试
+
+```bash
+# 运行所有 API 测试
+go test -v ./test/api_test.go
+
+# 显示详细输出
+go test -v -run=^TestGetAllStocks ./test/
+```
+
+#### 2. 运行特定的 API 测试
+
+```bash
+# 成功获取股票测试
+go test -v -run=TestGetAllStocks_Success ./test/
+
+# SZSE 交易所测试
+go test -v -run=TestGetAllStocks_WithSZSEExchange ./test/
+
+# 空响应处理测试
+go test -v -run=TestGetAllStocks_EmptyResponse ./test/
+
+# API 错误响应测试
+go test -v -run=TestGetAllStocks_APIError ./test/
+
+# HTTP 错误测试
+go test -v -run=TestGetAllStocks_HTTPError ./test/
+
+# JSON 解析错误测试
+go test -v -run=TestGetAllStocks_MalformedJSON ./test/
+
+# 字段验证测试
+go test -v -run=TestGetAllStocks_StockFieldValidation ./test/
+
+# 不同交易所测试
+go test -v -run=TestGetAllStocks_DifferentExchanges ./test/
+
+# 特殊字符测试
+go test -v -run=TestGetAllStocks_SpecialCharactersInFields ./test/
+```
+
+#### 3. 运行 API 基准测试
+
+```bash
+# 运行所有 API 基准测试
+go test -v -bench=GetAllStocks -benchmem ./test/
+
+# 运行 1000 个股票获取基准
+go test -v -bench=BenchmarkGetAllStocks ./test/
+
+# 运行 JSON 反序列化基准
+go test -v -bench=BenchmarkGetAllStocks_JSONUnmarshal ./test/
+
+# 长时间运行基准测试
+go test -v -bench=GetAllStocks -benchmem -benchtime=10s ./test/
+```
+
+### API 测试覆盖范围
+
+#### 功能测试
+
+| 测试名称 | 用途 | 说明 |
+|---------|------|------|
+| TestGetAllStocks_Success | 基本功能 | 验证成功获取股票列表 |
+| TestGetAllStocks_WithSZSEExchange | 深交所 | 验证 SZSE 交易所参数处理 |
+| TestGetAllStocks_EmptyResponse | 空列表 | 验证空股票列表处理 |
+| TestGetAllStocks_EmptyAPIKey | API Key | 验证空 API Key 默认为 "demo" |
+| TestGetAllStocks_MultipleStocks | 批量 | 验证返回 100 个股票 |
+
+#### 错误处理
+
+| 测试名称 | 错误类型 | 说明 |
+|---------|---------|------|
+| TestGetAllStocks_APIError | API 错误 | 验证 status != "ok" 的处理 |
+| TestGetAllStocks_HTTPError | HTTP 错误 | 验证 HTTP 401 Unauthorized |
+| TestGetAllStocks_MalformedJSON | 格式错误 | 验证畸形 JSON 处理 |
+| TestGetAllStocks_ServerTimeout | 超时 | 验证服务器超时处理 |
+
+#### 数据验证
+
+| 测试名称 | 验证内容 | 说明 |
+|---------|---------|------|
+| TestGetAllStocks_StockFieldValidation | 所有字段 | 验证 10 个股票字段 |
+| TestGetAllStocks_DifferentExchanges | 5 个交易所 | 验证 SZSE, SSE, HKEX, NYSE, NASDAQ |
+| TestGetAllStocks_SpecialCharactersInFields | 特殊字符 | 验证中文字符处理 |
+
+### API 测试示例
+
+#### 示例 1: 获取深交所股票
+
+```bash
+go test -v -run=TestGetAllStocks_WithSZSEExchange ./test/
+```
+
+输出示例:
+```
+=== RUN   TestGetAllStocks_WithSZSEExchange
+--- PASS: TestGetAllStocks_WithSZSEExchange (0.00s)
+```
+
+#### 示例 2: 验证所有股票字段
+
+```bash
+go test -v -run=TestGetAllStocks_StockFieldValidation ./test/
+```
+
+此测试验证以下字段:
+- Symbol (符号)
+- Name (名称)
+- Currency (货币)
+- Exchange (交易所)
+- MICCode (MIC 代码)
+- Country (国家)
+- Type (类型)
+- FIGICode (FIGI 代码)
+- CFICode (CFI 代码)
+- ISIN (ISIN 代码)
+- CUSIP (CUSIP 代码)
+
+#### 示例 3: 性能基准
+
+```bash
+go test -v -bench=BenchmarkGetAllStocks -benchmem ./test/
+```
+
+输出示例:
+```
+BenchmarkGetAllStocks-8                      1000    1234567 ns/op    45678 B/op    123 allocs/op
+BenchmarkGetAllStocks_JSONUnmarshal-8        500     2345678 ns/op    78901 B/op    234 allocs/op
+```
+
+### API 使用示例
+
+#### 获取深交所股票
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+    "twelve_data_client/internal/services"
+)
+
+func main() {
+    // 获取深交所的股票列表
+    stocks, err := services.GetAllStocks("SZSE", "demo")
+    if err != nil {
+        log.Fatalf("获取股票失败: %v", err)
+    }
+
+    // 遍历股票
+    for _, stock := range stocks {
+        fmt.Printf("符号: %s, 名称: %s, 交易所: %s\n", 
+            stock.Symbol, stock.Name, stock.Exchange)
+    }
+
+    fmt.Printf("总共获取 %d 个股票\n", len(stocks))
+}
+```
+
+#### 处理错误
+
+```go
+stocks, err := services.GetAllStocks("SZSE", "demo")
+if err != nil {
+    switch err.Error() {
+    case "API返回状态: error":
+        log.Println("API 返回错误状态")
+    case "API返回非OK状态: 401 Unauthorized":
+        log.Println("API Key 无效")
+    case "解码响应失败":
+        log.Println("响应格式不正确")
+    default:
+        log.Printf("未知错误: %v", err)
+    }
+}
+```
+
+### GetAllStocks 函数签名
+
+```go
+func GetAllStocks(exchange string, apiKey string) ([]model.Stock, error)
+```
+
+#### 参数说明
+
+| 参数 | 类型 | 说明 | 示例 |
+|-----|------|------|------|
+| exchange | string | 交易所代码 | "SZSE", "SSE", "HKEX" |
+| apiKey | string | API 密钥，空值默认为 "demo" | "demo", "your_api_key" |
+
+#### 返回值
+
+| 返回值 | 类型 | 说明 |
+|------|------|------|
+| [] Stock | 数组 | 股票信息数组 |
+| error | 错误 | 出错时返回错误信息 |
+
+#### Stock 结构体
+
+```go
+type Stock struct {
+    Symbol    string // 股票代码
+    Name      string // 股票名称
+    Currency  string // 货币代码
+    Exchange  string // 交易所代码
+    MICCode   string // MIC 代码
+    Country   string // 国家代码
+    Type      string // 资产类型
+    FIGICode  string // FIGI 代码
+    CFICode   string // CFI 代码
+    ISIN      string // ISIN 代码
+    CUSIP     string // CUSIP 代码
+}
+```
+
 ### 输出格式说明
 
 #### 测试输出格式
