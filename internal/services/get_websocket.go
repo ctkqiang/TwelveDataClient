@@ -1,7 +1,6 @@
 package services
 
 import (
-	"fmt"
 	"twelve_data_client/internal/constant"
 	"twelve_data_client/internal/logger"
 	"twelve_data_client/internal/model"
