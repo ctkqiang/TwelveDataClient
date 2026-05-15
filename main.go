@@ -4,13 +4,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"strings"
 	"time"
 	"twelve_data_client/internal/color"
 	"twelve_data_client/internal/constant"
+	"twelve_data_client/internal/logger"
 	"twelve_data_client/internal/model"
 	"twelve_data_client/internal/services"
 
@@ -67,21 +67,28 @@ func main() {
 
 	flag.Parse()
 
+	// Initialize logger
+	logger.SetPrefix("TwelveDataClient")
+	logger.SetLevel(logger.InfoLevel)
+
 	if userArguement == "{YOUR_API_KEY_HERE}" {
-		fmt.Println(color.Red("缺少API密钥。请从https://twelvedata.com/获取一个。"))
-		os.Exit(1)
+		logger.Fatal("缺少API密钥。请从 https://twelvedata.com/ 获取一个。")
 	}
-	
-	fmt.Println(color.Cyanf("API密钥: ...%s", userArguement[len(userArguement)-0x4:]))
+
+	logger.Info("API密钥: ...%s", userArguement[len(userArguement)-0x4:])
 	
 	if mode == "api" {
-		fmt.Println(color.Dimf("端点: %s", constant.TWELVED_DATA_API_URL))
+		logger.Info("端点: %s", constant.TWELVED_DATA_API_URL)
 
+		logger.Debug("正在获取所有股票列表...")
 		stocks, err := services.GetAllStocks(Exchange, "demo")
 		if err != nil {
-			panic(err)
+			logger.Fatal("获取股票列表失败: %v", err)
 		}
 
+		logger.LogSuccess("获取股票列表", fmt.Sprintf("总数: %d", len(stocks)))
+
+		// Print stock list header
 		fmt.Printf("  %s %s %s %s %s\n",
 			color.Bold(color.Blue("代码")),
 			color.Bold(color.Blue("名称")),
@@ -89,7 +96,7 @@ func main() {
 			color.Bold(color.Blue("货币")),
 			color.Bold(color.Blue("类型")),
 		)
-		
+
 		fmt.Printf("  %s\n", color.Blue(strings.Repeat("─", 0x50)))
 
 		for _, s := range stocks {
@@ -123,9 +130,10 @@ func main() {
 				OutputSize: 0x5,
 			}
 
+			logger.Debug("正在获取时间序列数据: %s", fullSymbol)
 			tsResp, err := services.GetTimeSeries(userArguement, params)
 			if err != nil {
-				fmt.Printf("  %s  %s - %v\n", color.Red("NOPE"), fullSymbol, err)
+				logger.Error("获取时间序列数据失败: %s - %v", fullSymbol, err)
 				continue
 			}
 
@@ -133,7 +141,6 @@ func main() {
 				color.Cyan(s.Symbol),
 				color.White(truncate(s.Name, 0x18)),
 				color.Yellow(s.Currency))
-
 
 			fmt.Printf("  %s  %s  %s  %s  %s  %s\n",
 				color.Bold("日期"),
@@ -154,17 +161,18 @@ func main() {
 				)
 			}
 
-
 			time.Sleep(0x1 * time.Second)
 		}
 	} else if mode == "ws" {
-		fmt.Println(color.Dimf("端点: %s", constant.TWELVED_DATA_WEBSOCKET_URL))
-	
+		logger.Info("端点: %s", constant.TWELVED_DATA_WEBSOCKET_URL)
+
+		logger.Debug("正在连接到 WebSocket...")
 		connection, err := services.GetTwelveDataWebSocket(userArguement, model.NewSubscribe(symbols...))
 		if err != nil {
-			panic(err)
+			logger.Fatal("WebSocket 连接失败: %v", err)
 		}
 
+		logger.LogSuccess("WebSocket 连接")
 		defer connection.Close()
 
 		done := make(chan struct{})
@@ -174,6 +182,7 @@ func main() {
 			return nil
 		})
 
+		// Heartbeat goroutine
 		go func() {
 			ticker := time.NewTicker(pingPeriod)
 			defer ticker.Stop()
@@ -185,7 +194,7 @@ func main() {
 				case <-ticker.C:
 					connection.SetWriteDeadline(time.Now().Add(0xA * time.Second))
 					if err := connection.WriteMessage(websocket.PingMessage, nil); err != nil {
-						log.Println(color.Redf("心跳发送失败: %v", err))
+						logger.Error("心跳发送失败: %v", err)
 						return
 					}
 				}
@@ -194,17 +203,18 @@ func main() {
 
 		subscriptionConfirmed := false
 
+		// Message reading goroutine
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					log.Println("读取协程异常恢复:", r)
+					logger.Error("读取协程异常恢复: %v", r)
 				}
 			}()
 
 			for {
 				_, message, err := connection.ReadMessage()
 				if err != nil {
-					log.Println(color.Redf("读取消息失败: %v", err))
+					logger.Error("读取消息失败: %v", err)
 					close(messageChannel)
 					return
 				}
@@ -212,7 +222,8 @@ func main() {
 				if err := json.Unmarshal(message, &subResp); err == nil && len(subResp.Success) > 0 {
 					if !subscriptionConfirmed {
 						subscriptionConfirmed = true
-						
+						logger.LogSuccess("订阅确认", fmt.Sprintf("共 %d 个符号", len(subResp.Success)))
+
 						fmt.Println(color.Bold(color.Green("  已订阅")))
 
 						for _, detail := range subResp.Success {
@@ -231,25 +242,25 @@ func main() {
 					continue
 				}
 
-				log.Println(color.Redf("未知消息类型: %s", string(message)))
+				logger.Warn("未知消息类型: %s", string(message))
 			}
 		}()
 
 		signal.Notify(interruptChannel, os.Interrupt)
-		fmt.Println(color.Blue(">>> 实时流已开启，等待数据 ..."))
+		logger.Info("实时流已开启，等待数据...")
 
 		for {
 			select {
 			case message, ok := <-messageChannel:
 				if !ok {
-					fmt.Println(color.Yellow("数据流通道已关闭，程序退出。"))
+					logger.Info("数据流通道已关闭，程序退出。")
 					close(done)
 					return
 				}
 
 				var price model.PriceEvent
 				if err := json.Unmarshal(message, &price); err != nil {
-					log.Println(color.Redf("解析价格失败: %v", err))
+					logger.Error("解析价格失败: %v", err)
 					continue
 				}
 
@@ -259,14 +270,13 @@ func main() {
 					color.Dim(price.Exchange))
 
 			case <-interruptChannel:
-				fmt.Println(color.Yellow("\n收到停止信号，正在关闭连接..."))
+				logger.Info("收到停止信号，正在关闭连接...")
 				close(done)
 				return
 			}
 		}
 	} else {
-		fmt.Println(color.Red("无效模式。请使用 --api 或 --ws。"))
-		os.Exit(0x1)
+		logger.Fatal("无效模式。请使用 --mode=\"api\" 或 --mode=\"ws\"。")
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"time"
 	"twelve_data_client/internal/constant"
+	"twelve_data_client/internal/logger"
 	"twelve_data_client/internal/model"
 )
 
@@ -35,6 +36,7 @@ func GetAllStocks(exchange string, apiKey string) ([]model.Stock, error) {
 
 	u, err := url.Parse(constant.TWELVED_DATA_API_URL + "/stocks")
 	if err != nil {
+		logger.LogError("解析 API URL", err)
 		return nil, fmt.Errorf("解析 API URL 失败: %w", err)
 	}
 
@@ -50,41 +52,53 @@ func GetAllStocks(exchange string, apiKey string) ([]model.Stock, error) {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
+		logger.LogError("构建请求", err)
 		return nil, fmt.Errorf("构建请求失败: %w", err)
 	}
 
+	logger.LogRequest("GET", "/stocks")
+
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
+		logger.LogError("请求 API", err, "endpoint: /stocks")
 		return nil, fmt.Errorf("请求 API 失败: %w", err)
 	}
 
 	defer resp.Body.Close()
 
+	logger.LogResponse(resp.StatusCode, "获取股票列表")
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		logger.LogError("读取响应体", err)
 		return nil, fmt.Errorf("读取响应体失败: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		logger.Error("API 返回异常状态: HTTP %d", resp.StatusCode)
 		return nil, fmt.Errorf("API 返回 HTTP %d: %s", resp.StatusCode, string(body))
 	}
 
 	if err := json.Unmarshal(body, &r); err != nil {
+		logger.LogError("解码 JSON", err)
 		return nil, fmt.Errorf("解码 JSON 失败: %w", err)
 	}
 
 	if r.Status != "ok" {
+		logger.Warn("API 状态异常: %s", r.Status)
 		return nil, fmt.Errorf("API 状态异常: %s", r.Status)
 	}
 
+	logger.Debug("成功获取 %d 只股票", len(r.Data))
 	return r.Data, nil
 }
 
 func GetTimeSeries(apiKey string, params *model.TimeSeriesParams) (*model.TimeSeriesResponse, error) {
 	var tsResp model.TimeSeriesResponse
-	
+
 	if apiKey == "" {
-		return nil, fmt.Errorf("API密钥不能为空")
+		logger.Error("API 密钥不能为空")
+		return nil, fmt.Errorf("API 密钥不能为空")
 	}
 
 	q := url.Values{}
@@ -109,24 +123,32 @@ func GetTimeSeries(apiKey string, params *model.TimeSeriesParams) (*model.TimeSe
 	baseURL := constant.TWELVED_DATA_API_URL + "/time_series"
 	fullURL := fmt.Sprintf("%s?%s", baseURL, q.Encode())
 
+	logger.LogRequest("GET", fmt.Sprintf("/time_series (symbol: %s)", params.Symbol))
+
 	resp, err := http.Get(fullURL)
 	if err != nil {
+		logger.LogError("请求时间序列数据", err, params.Symbol)
 		return nil, fmt.Errorf("请求时间序列数据失败: %w", err)
 	}
 	defer resp.Body.Close()
 
+	logger.LogResponse(resp.StatusCode, fmt.Sprintf("时间序列数据 (%s)", params.Symbol))
+
 	if resp.StatusCode != http.StatusOK {
+		logger.Error("API 返回非 OK 状态: %s", resp.Status)
 		return nil, fmt.Errorf("API 返回非 OK 状态: %s", resp.Status)
 	}
 
-
 	if err := json.NewDecoder(resp.Body).Decode(&tsResp); err != nil {
+		logger.LogError("解码响应", err, params.Symbol)
 		return nil, fmt.Errorf("解码响应失败: %w", err)
 	}
 
 	if tsResp.Status != "ok" {
+		logger.Warn("API 返回错误状态: %s", tsResp.Status)
 		return nil, fmt.Errorf("API 返回错误状态: %s", tsResp.Status)
 	}
 
+	logger.Debug("成功获取 %d 条时间序列数据", len(tsResp.Values))
 	return &tsResp, nil
 }
